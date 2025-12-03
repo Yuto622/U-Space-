@@ -1,0 +1,7 @@
+{
+  "name": "English Town Metaverse",
+  "description": "A 2D top-down metaverse for practicing English conversation with AI NPCs. Walk around the town and chat with the staff.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

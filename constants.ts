@@ -49,6 +49,22 @@ export const MAPS: Record<MapId, GameMap> = {
       // Park Benches
       { type: 'bench', x: 1500, y: 1300, w: 80, h: 40, color: '#78350f' },
       { type: 'bench', x: 1600, y: 1350, w: 80, h: 40, color: '#78350f' },
+      
+      // Street Lamps (Along main roads)
+      { type: 'lamp', x: 450, y: 300, w: 20, h: 60, color: '#334155' }, // Near Cafe
+      { type: 'lamp', x: 1050, y: 300, w: 20, h: 60, color: '#334155' }, // Near Station
+      { type: 'lamp', x: 1350, y: 300, w: 20, h: 60, color: '#334155' },
+      { type: 'lamp', x: 1050, y: 1350, w: 20, h: 60, color: '#334155' }, // Near Library/Plaza
+      { type: 'lamp', x: 1350, y: 1350, w: 20, h: 60, color: '#334155' },
+      { type: 'lamp', x: 450, y: 750, w: 20, h: 60, color: '#334155' }, // Near Tech/Hosp
+      { type: 'lamp', x: 1750, y: 750, w: 20, h: 60, color: '#334155' }, // Near Market
+
+      // Cars (Parked)
+      { type: 'car', x: 1400, y: 180, w: 80, h: 40, color: '#dc2626' }, // Station Parking
+      { type: 'car', x: 1500, y: 180, w: 80, h: 40, color: '#2563eb' },
+      { type: 'car', x: 1600, y: 550, w: 80, h: 40, color: '#fbbf24' }, // Market Parking
+      { type: 'car', x: 1600, y: 500, w: 80, h: 40, color: '#cbd5e1' },
+      { type: 'car', x: 100, y: 750, w: 80, h: 40, color: '#000000' }, // Hospital Ambulance-ish
     ]
   },
   cafe: {

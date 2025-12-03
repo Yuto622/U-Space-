@@ -28,7 +28,7 @@ export interface Portal {
 }
 
 export interface Furniture {
-  type: 'table' | 'shelf' | 'bed' | 'counter' | 'desk' | 'potted_plant' | 'bench' | 'fountain' | 'chair';
+  type: 'table' | 'shelf' | 'bed' | 'counter' | 'desk' | 'potted_plant' | 'bench' | 'fountain' | 'chair' | 'car' | 'lamp';
   x: number;
   y: number;
   w: number;

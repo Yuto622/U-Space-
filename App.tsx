@@ -34,6 +34,16 @@ const STATIC_FLOWERS = Array.from({ length: 150 }).map(() => ({
   color: ['#f472b6', '#fbbf24', '#a78bfa'][getRandomInt(0, 2)]
 }));
 
+// Floating Particles (Leaves/Petals)
+const PARTICLES = Array.from({ length: 30 }).map(() => ({
+  x: Math.random() * 2400,
+  y: Math.random() * 1800,
+  speedX: (Math.random() - 0.5) * 1,
+  speedY: Math.random() * 1 + 0.5,
+  size: Math.random() * 3 + 2,
+  color: Math.random() > 0.5 ? '#f472b6' : '#86efac' // Pink or Green
+}));
+
 export default function App() {
   // Game State
   const [currentMapId, setCurrentMapId] = useState<MapId>('world');
@@ -43,6 +53,7 @@ export default function App() {
   const [isTalking, setIsTalking] = useState(false);
   const [isLoadingReply, setIsLoadingReply] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: window.innerWidth, height: window.innerHeight });
+  const [gameTime, setGameTime] = useState(12); // Hour 0-24
   
   // Transition State
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -55,10 +66,10 @@ export default function App() {
   // Animation State
   const frameRef = useRef<number>(0);
   const isMovingRef = useRef<boolean>(false);
-  const lastFacingRef = useRef<number>(1);
   const requestRef = useRef<number>();
   const playerPosRef = useRef<Position>({ x: 1200, y: 900 });
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const timeRef = useRef<number>(1200); // Internal time counter
 
   // Resize Handler
   useEffect(() => {
@@ -217,7 +228,7 @@ export default function App() {
     }
   };
 
-  const drawBuildingExterior = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string, label: string) => {
+  const drawBuildingExterior = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, color: string, label: string, isNight: boolean) => {
     // Shadow
     ctx.fillStyle = 'rgba(0,0,0,0.2)'; 
     ctx.fillRect(x + 10, y + 10, w, h);
@@ -227,20 +238,32 @@ export default function App() {
     ctx.fillRect(x, y, w, h);
     
     // Windows
-    ctx.fillStyle = '#bae6fd'; // Light blue glass
     const cols = Math.floor(w / 40);
     const rows = Math.floor(h / 50);
     for(let r = 0; r < rows - 1; r++) {
       for(let c = 0; c < cols; c++) {
-         if (Math.random() > 0.7) continue; // Randomly skip some for variety
+         // Window logic
          const wx = x + 15 + c * 35;
          const wy = y + 30 + r * 45;
+         
+         // Only draw if within bounds
          if (wx + 20 < x + w && wy + 30 < y + h) {
-            ctx.fillRect(wx, wy, 20, 30);
-            // Window sill
-            ctx.fillStyle = '#94a3b8';
-            ctx.fillRect(wx - 2, wy + 30, 24, 4);
-            ctx.fillStyle = '#bae6fd'; // Reset
+             const isLit = isNight && (Math.sin(wx + wy + Date.now()/1000) > 0.2); // Random flickering/on-off based on position
+             
+             ctx.fillStyle = isLit ? '#fef9c3' : '#bae6fd'; // Yellow if night&lit, Blue if day/off
+             ctx.fillRect(wx, wy, 20, 30);
+             
+             if (isLit) {
+               ctx.save();
+               ctx.globalCompositeOperation = 'screen';
+               ctx.fillStyle = 'rgba(253, 224, 71, 0.3)';
+               ctx.beginPath(); ctx.arc(wx + 10, wy + 15, 20, 0, Math.PI*2); ctx.fill();
+               ctx.restore();
+             }
+
+             // Window sill
+             ctx.fillStyle = '#94a3b8';
+             ctx.fillRect(wx - 2, wy + 30, 24, 4);
          }
       }
     }
@@ -269,36 +292,72 @@ export default function App() {
 
   const drawFurniture = (ctx: CanvasRenderingContext2D, f: Furniture) => {
     // Shadows
-    if (f.type !== 'fountain') {
+    if (f.type !== 'fountain' && f.type !== 'car') {
         ctx.fillStyle = 'rgba(0,0,0,0.15)';
         ctx.fillRect(f.x + 2, f.y + f.h - 2, f.w, 4);
     }
 
-    ctx.fillStyle = f.color;
-    
     if (f.type === 'fountain') {
        // Water pool
+       const flow = Math.sin(Date.now() / 500) * 2;
        ctx.fillStyle = '#93c5fd';
-       ctx.beginPath(); ctx.ellipse(f.x + f.w/2, f.y + f.h/2, f.w/2, f.h/2 - 10, 0, 0, Math.PI*2); ctx.fill();
+       ctx.beginPath(); ctx.ellipse(f.x + f.w/2, f.y + f.h/2, f.w/2 + flow, f.h/2 - 10 + flow/2, 0, 0, Math.PI*2); ctx.fill();
        ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 8; ctx.stroke();
+       
        // Center spout
        ctx.fillStyle = '#f1f5f9';
        ctx.beginPath(); ctx.arc(f.x + f.w/2, f.y + f.h/2 - 10, 20, 0, Math.PI*2); ctx.fill();
-       // Spray particles (simple static for now, could animate)
-       ctx.fillStyle = 'rgba(255,255,255,0.6)';
-       for(let i=0; i<5; i++) {
-           ctx.beginPath(); ctx.arc(f.x + f.w/2 + (Math.random()-0.5)*40, f.y + f.h/2 - 20 + (Math.random()-0.5)*20, 3, 0, Math.PI*2); ctx.fill();
+       
+       // Dynamic Spray
+       const time = Date.now();
+       ctx.fillStyle = 'rgba(255,255,255,0.7)';
+       for(let i=0; i<8; i++) {
+           const offset = (time / 200 + i) % 8;
+           const r = offset * 4;
+           const alpha = 1 - (offset / 8);
+           ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+           ctx.beginPath(); 
+           ctx.arc(f.x + f.w/2 + Math.cos(i)*r, f.y + f.h/2 - 20 + Math.sin(i)*r, 3, 0, Math.PI*2); 
+           ctx.fill();
        }
        return;
     }
 
-    // Simple 3D extrusion effect for blocky items
+    if (f.type === 'lamp') {
+        // Pole
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(f.x + f.w/2 - 2, f.y, 4, f.h);
+        // Base
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath(); ctx.ellipse(f.x + f.w/2, f.y + f.h, 6, 3, 0, 0, Math.PI*2); ctx.fill();
+        // Light fixture
+        ctx.fillStyle = '#fef08a'; // Bulb color off/on
+        ctx.beginPath(); ctx.arc(f.x + f.w/2, f.y + 4, 8, 0, Math.PI*2); ctx.fill();
+        return; // Light glow handled in night pass
+    }
+
+    if (f.type === 'car') {
+        drawShadow(ctx, f.x + 5, f.y + 5, 20);
+        ctx.fillStyle = f.color;
+        // Body
+        ctx.beginPath(); ctx.roundRect(f.x, f.y, f.w, f.h, 8); ctx.fill();
+        // Cabin
+        ctx.fillStyle = '#334155';
+        ctx.beginPath(); ctx.roundRect(f.x + 10, f.y + 5, f.w - 20, f.h - 10, 5); ctx.fill();
+        // Windows
+        ctx.fillStyle = '#bae6fd';
+        ctx.fillRect(f.x + 20, f.y + 8, 15, f.h - 16); // Rear
+        ctx.fillRect(f.x + 45, f.y + 8, 15, f.h - 16); // Front
+        return;
+    }
+
+    // Generic furniture
+    ctx.fillStyle = f.color;
     if (['counter', 'table', 'desk', 'shelf', 'bed', 'bench'].includes(f.type)) {
         ctx.fillRect(f.x, f.y - 10, f.w, f.h); 
         ctx.fillStyle = 'rgba(0,0,0,0.1)';
         ctx.fillRect(f.x, f.y + f.h - 10, f.w, 10); // Side shadow
     } else if (f.type === 'chair') {
-        // Simple backrest and seat
         ctx.fillStyle = f.color;
         ctx.fillRect(f.x, f.y, f.w, f.h); // Seat
         ctx.fillStyle = 'rgba(0,0,0,0.1)'; // Darker back
@@ -384,6 +443,20 @@ export default function App() {
         return;
     }
 
+    // Update Time (1 min game time every 2 frames ~ 2s real time = 1 hour game time)
+    timeRef.current += 0.5;
+    if (timeRef.current >= 2400) timeRef.current = 0;
+    setGameTime(Math.floor(timeRef.current / 100));
+
+    // Update Particles
+    PARTICLES.forEach(p => {
+        p.x += p.speedX;
+        p.y += p.speedY;
+        if (p.x > 2400) p.x = 0;
+        if (p.x < 0) p.x = 2400;
+        if (p.y > 1800) p.y = 0;
+    });
+
     let dx = 0, dy = 0;
     if (keysPressed.current.has('ArrowUp') || keysPressed.current.has('KeyW')) dy -= 1;
     if (keysPressed.current.has('ArrowDown') || keysPressed.current.has('KeyS')) dy += 1;
@@ -396,7 +469,6 @@ export default function App() {
 
     const isMoving = dx !== 0 || dy !== 0;
     isMovingRef.current = isMoving;
-    if (dx !== 0) lastFacingRef.current = Math.sign(dx);
 
     if (isMoving) {
       const currentMap = MAPS[currentMapId];
@@ -458,7 +530,11 @@ export default function App() {
     if (!ctx) return;
 
     const currentMap = MAPS[currentMapId];
-    const isIndoors = currentMapId !== 'world';
+    
+    // Day/Night Logic
+    const hour = gameTime;
+    const isNight = hour >= 19 || hour < 6;
+    const darknessLevel = (hour >= 20 || hour < 5) ? 0.6 : (hour === 19 || hour === 5 || hour === 6) ? 0.3 : 0;
 
     // 1. Camera & Clear
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -493,8 +569,9 @@ export default function App() {
        drawCrosswalk(ctx, 1125, 1400, 150, 60, true); // Center Bottom
 
        // Water (Lake)
+       const waterFlow = Math.sin(Date.now() / 1000) * 5;
        ctx.fillStyle = COLOR_WATER;
-       ctx.beginPath(); ctx.ellipse(1900, 1400, 200, 150, 0, 0, Math.PI * 2); ctx.fill();
+       ctx.beginPath(); ctx.ellipse(1900, 1400, 200 + waterFlow, 150 + waterFlow, 0, 0, Math.PI * 2); ctx.fill();
     } else {
        // Indoor Walls (Border)
        ctx.strokeStyle = '#334155';
@@ -519,7 +596,6 @@ export default function App() {
         y: npc.position.y,
         draw: (c) => {
            drawCharacter(c, npc.position.x, npc.position.y, npc.skinColor, npc.hairColor, npc.shirtColor, npc.pantsColor, false, false);
-           // Quest Marker / Interaction Bubble
            const dist = Math.sqrt(Math.pow(playerPos.x - npc.position.x, 2) + Math.pow(playerPos.y - npc.position.y, 2));
            if (dist < INTERACTION_RADIUS * 2.5) {
              c.fillStyle = '#fff';
@@ -548,6 +624,19 @@ export default function App() {
         STATIC_FLOWERS.forEach(f => {
              ctx.fillStyle = f.color; ctx.beginPath(); ctx.arc(f.x, f.y, 3, 0, Math.PI * 2); ctx.fill();
         });
+        
+        // Falling Particles
+        PARTICLES.forEach(p => {
+             if (p.x < camX - 50 || p.x > camX + canvas.width + 50) return;
+             entities.push({
+                 type: 'prop',
+                 y: p.y, // Sort by Y
+                 draw: (c) => {
+                     c.fillStyle = p.color;
+                     c.beginPath(); c.arc(p.x, p.y, p.size, 0, Math.PI*2); c.fill();
+                 }
+             });
+        });
     }
 
     // Buildings - Only in World
@@ -566,7 +655,7 @@ export default function App() {
              entities.push({
                  type: 'building',
                  y: b.y + b.h - 10,
-                 draw: (c) => drawBuildingExterior(c, b.x, b.y, b.w, b.h, b.color, b.label)
+                 draw: (c) => drawBuildingExterior(c, b.x, b.y, b.w, b.h, b.color, b.label, isNight)
              });
         });
     }
@@ -583,6 +672,34 @@ export default function App() {
     entities.sort((a, b) => a.y - b.y);
     entities.forEach(e => e.draw(ctx));
 
+    // Night Filter
+    if (darknessLevel > 0) {
+        // Draw darkness
+        ctx.fillStyle = `rgba(0, 5, 20, ${darknessLevel})`;
+        ctx.fillRect(camX, camY, canvas.width, canvas.height); // Cover screen relative to cam
+
+        // Draw Lights (Carve out darkness or add glow)
+        ctx.globalCompositeOperation = 'screen'; // Additive blending for lights
+        
+        // Street Lamps glow
+        currentMap.furniture.filter(f => f.type === 'lamp').forEach(f => {
+            const grad = ctx.createRadialGradient(f.x + f.w/2, f.y + 4, 2, f.x + f.w/2, f.y + 4, 60);
+            grad.addColorStop(0, 'rgba(255, 240, 150, 0.6)');
+            grad.addColorStop(1, 'rgba(255, 240, 150, 0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath(); ctx.arc(f.x + f.w/2, f.y + 4, 60, 0, Math.PI*2); ctx.fill();
+        });
+
+        // Player Flashlight/Glow
+        const pGrad = ctx.createRadialGradient(playerPos.x, playerPos.y - 20, 10, playerPos.x, playerPos.y - 20, 80);
+        pGrad.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
+        pGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = pGrad;
+        ctx.beginPath(); ctx.arc(playerPos.x, playerPos.y - 20, 80, 0, Math.PI*2); ctx.fill();
+
+        ctx.globalCompositeOperation = 'source-over'; // Reset
+    }
+
     // Portals (Visual hints)
     if (currentMapId !== 'world') {
         const exit = currentMap.portals[0];
@@ -596,16 +713,22 @@ export default function App() {
 
     ctx.restore();
 
-  }, [playerPos, canvasSize, currentMapId]);
+  }, [playerPos, canvasSize, currentMapId, gameTime]);
 
   return (
     <div className="relative w-screen h-screen bg-black overflow-hidden font-sans select-none">
       <canvas ref={canvasRef} width={canvasSize.width} height={canvasSize.height} className="block" />
 
-      {/* HUD: Location Toast */}
-      <div className="absolute top-4 left-4 bg-white/90 backdrop-blur text-slate-900 px-4 py-2 rounded-xl shadow-lg border border-slate-200 z-10 flex items-center gap-2">
-         <div className={`w-2 h-2 rounded-full ${currentMapId === 'world' ? 'bg-green-500' : 'bg-blue-500'}`}></div>
-         <span className="font-bold tracking-wide">{MAPS[currentMapId].name}</span>
+      {/* HUD: Location & Time */}
+      <div className="absolute top-4 left-4 flex flex-col gap-2">
+         <div className="bg-white/90 backdrop-blur text-slate-900 px-4 py-2 rounded-full shadow-lg border border-slate-200 z-10 flex items-center gap-2">
+            <div className={`w-3 h-3 rounded-full ${currentMapId === 'world' ? 'bg-green-500' : 'bg-blue-500'}`}></div>
+            <span className="font-bold tracking-wide uppercase text-xs">{MAPS[currentMapId].name}</span>
+         </div>
+         <div className="bg-slate-900/90 backdrop-blur text-white px-4 py-2 rounded-full shadow-lg border border-slate-700 z-10 flex items-center gap-2 w-fit">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            <span className="font-mono text-xs">{String(gameTime).padStart(2, '0')}:00</span>
+         </div>
       </div>
 
       {!process.env.API_KEY && (
